@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>IP Weather Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: linear-gradient(135deg, #0f172a 0%, #1f2937 40%, #111827 100%);
+        color: #e5e7eb;
+      }
+
+      .card {
+        background-color: rgba(15, 23, 42, 0.95);
+        border-radius: 24px;
+        padding: 24px 28px;
+        max-width: 480px;
+        width: 90%;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+      }
+
+      .card h1 {
+        font-size: 24px;
+        margin: 0 0 4px;
+      }
+
+      .card p.subtitle {
+        font-size: 14px;
+        color: #9ca3af;
+        margin: 0 0 20px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .temperature {
+        font-size: 40px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .temp-label {
+        font-size: 14px;
+        color: #9ca3af;
+        margin-top: 4px;
+      }
+
+      .location {
+        text-align: right;
+        font-size: 14px;
+      }
+
+      .location span {
+        font-size: 12px;
+        color: #9ca3af;
+      }
+
+      hr {
+        border: none;
+        border-top: 1px solid rgba(55, 65, 81, 0.9);
+        margin: 16px 0;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        font-size: 12px;
+      }
+
+      .tile {
+        background-color: rgba(15, 23, 42, 0.9);
+        border-radius: 12px;
+        padding: 10px;
+        border: 1px solid rgba(55, 65, 81, 0.9);
+      }
+
+      .tile-label {
+        color: #9ca3af;
+        margin-bottom: 4px;
+      }
+
+      .tile-value {
+        font-weight: 600;
+      }
+
+      .tile-small {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 2px;
+      }
+
+      .footer-text {
+        margin-top: 16px;
+        font-size: 11px;
+        color: #6b7280;
+      }
+
+      .status {
+        font-size: 14px;
+        color: #9ca3af;
+      }
+
+      .error {
+        font-size: 14px;
+        color: #fca5a5;
+        background-color: rgba(127, 29, 29, 0.35);
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(248, 113, 113, 0.6);
+      }
+
+      .refresh-button {
+        margin-top: 12px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: none;
+        font-size: 13px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #3b82f6, #0ea5e9);
+        color: white;
+        font-weight: 600;
+      }
+
+      .refresh-button:hover {
+        opacity: 0.9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Jouw weer op dit moment</h1>
+      <p class="subtitle">Gebaseerd op je IP-adres en locatie.</p>
+
+      <div id="status" class="status">Laden…</div>
+
+      <div id="error" class="error" style="display: none;"></div>
+
+      <div id="content" style="display: none;">
+        <div class="row">
+          <div>
+            <div id="temperature" class="temperature">--°C</div>
+            <div class="temp-label">Huidige temperatuur op jouw locatie</div>
+          </div>
+          <div class="location">
+            <div id="city">Onbekende stad</div>
+            <span id="region-country"></span>
+          </div>
+        </div>
+
+        <hr />
+
+        <div class="grid">
+          <div class="tile">
+            <div class="tile-label">IP-adres</div>
+            <div id="ip" class="tile-value">---</div>
+          </div>
+
+          <div class="tile">
+            <div class="tile-label">Wind</div>
+            <div id="wind" class="tile-value">-- km/u</div>
+            <div id="wind-dir" class="tile-small">Richting: --°</div>
+          </div>
+
+          <div class="tile">
+            <div class="tile-label">Coördinaten</div>
+            <div id="coords" class="tile-value">--° / --°</div>
+          </div>
+        </div>
+
+        <p class="footer-text" id="updated">Laatst geüpdatet: --</p>
+        <button class="refresh-button" id="refreshBtn">Vernieuw weerdata</button>
+      </div>
+    </div>
+
+    <script>
+      async function loadWeather() {
+        const statusEl = document.getElementById("status");
+        const errorEl = document.getElementById("error");
+        const contentEl = document.getElementById("content");
+
+        statusEl.style.display = "block";
+        statusEl.textContent = "Laden…";
+        errorEl.style.display = "none";
+        contentEl.style.display = "none";
+
+        try {
+          const res = await fetch("/api/weather");
+          if (!res.ok) {
+            throw new Error("API error: " + res.status);
+          }
+          const data = await res.json();
+
+          // IP
+          document.getElementById("ip").textContent = data.ip || "---";
+
+          // Locatie
+          document.getElementById("city").textContent =
+            data.location?.city || "Onbekende stad";
+
+          const region = data.location?.region || "";
+          const country = data.location?.country || "";
+          document.getElementById("region-country").textContent =
+            (region ? region + ", " : "") + country;
+
+          // Temperatuur
+          const temp = data.weather?.temperature;
+          document.getElementById("temperature").textContent =
+            temp !== undefined ? Math.round(temp) + "°C" : "--°C";
+
+          // Wind
+          const windspeed = data.weather?.windspeed;
+          const winddir = data.weather?.winddirection;
+          document.getElementById("wind").textContent =
+            windspeed !== undefined
+              ? Math.round(windspeed) + " km/u"
+              : "-- km/u";
+          document.getElementById("wind-dir").textContent =
+            "Richting: " + (winddir !== undefined ? winddir : "--") + "°";
+
+          // Coördinaten
+          const lat = data.location?.latitude;
+          const lon = data.location?.longitude;
+          document.getElementById("coords").textContent =
+            lat !== undefined && lon !== undefined
+              ? lat.toFixed(2) + "° / " + lon.toFixed(2) + "°"
+              : "--° / --°";
+
+          // Tijd
+          const time = data.weather?.time;
+          if (time) {
+            const dt = new Date(time);
+            document.getElementById("updated").textContent =
+              "Laatst geüpdatet: " + dt.toLocaleString("nl-NL");
+          } else {
+            document.getElementById("updated").textContent =
+              "Laatst geüpdatet: onbekend";
+          }
+
+          statusEl.style.display = "none";
+          contentEl.style.display = "block";
+        } catch (err) {
+          console.error(err);
+          statusEl.style.display = "none";
+          errorEl.style.display = "block";
+          errorEl.textContent =
+            "Kon de weerdata niet ophalen. Probeer het later opnieuw.";
+        }
+      }
+
+      document.getElementById("refreshBtn").addEventListener("click", () => {
+        loadWeather();
+      });
+
+      // Auto load bij het laden van de pagina
+      loadWeather();
+    </script>
+  </body>
+</html>
